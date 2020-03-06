@@ -78,6 +78,7 @@ func Provider() terraform.ResourceProvider {
 			"ovh_domain_zone_redirection":                                 resourceOvhDomainZoneRedirection(),
 			"ovh_ip_reverse":                                              resourceOvhIpReverse(),
 			"ovh_ip_firewall":                                             resourceOvhIpFirewall(),
+			"ovh_ip_firewall_rule":                                        resourceOvhIpFirewallRule(),
 			"ovh_iploadbalancing_tcp_farm":                                resourceIpLoadbalancingTcpFarm(),
 			"ovh_iploadbalancing_tcp_farm_server":                         resourceIpLoadbalancingTcpFarmServer(),
 			"ovh_iploadbalancing_tcp_frontend":                            resourceIpLoadbalancingTcpFrontend(),
