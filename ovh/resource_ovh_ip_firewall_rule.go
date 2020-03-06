@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"log"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
@@ -307,13 +308,14 @@ func resourceOvhIpFirewallRuleRead(d *schema.ResourceData, meta interface{}) err
 		return nil
 	}
 
+	re := regexp.MustCompile("[0-9]+$")
 	d.Set("action", firewallRule.Action)
-	d.Set("destination_port", firewallRule.DestinationPort)
+	d.Set("destination_port", re.FindString(firewallRule.DestinationPort))
 	d.Set("fragments", firewallRule.Fragments)
 	d.Set("protocol", firewallRule.Protocol)
 	d.Set("sequence", firewallRule.Sequence)
 	d.Set("source", firewallRule.Source)
-	d.Set("source_port", firewallRule.SourcePort)
+	d.Set("source_port", re.FindString(firewallRule.SourcePort))
 	d.Set("tcp_option", firewallRule.TcpOption)
 	d.Set("fragments", firewallRule.Fragments)
 	d.Set("creation_date", firewallRule.CreationDate)
