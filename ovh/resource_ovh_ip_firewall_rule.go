@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"log"
 	"net"
-	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,13 +84,7 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 				Optional:     true,
 				ForceNew:     true,
 				ExactlyOneOf: []string{"firewall_id", "ip"},
-				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
-					err := validateIpBlock(v.(string))
-					if err != nil {
-						errors = append(errors, err)
-					}
-					return
-				},
+				ValidateFunc: resourceOvhFirewallRuleValidateIpBlock,
 			},
 			"ip_on_firewall": {
 				Type:         schema.TypeString,
@@ -140,20 +134,21 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 				},
 			},
 			"source": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Computed:    true,
-				ForceNew:    true,
-				Description: "Source ip for your rule",
+				Type:         schema.TypeString,
+				Optional:     true,
+				Computed:     true,
+				ForceNew:     true,
+				Description:  "Source ip for your rule",
+				ValidateFunc: resourceOvhFirewallRuleValidateIpBlock,
 			},
 			"source_port": {
-				Type:        schema.TypeString,
+				Type:        schema.TypeInt,
 				Optional:    true,
 				ForceNew:    true,
 				Description: "Source port range for your rule. Only with TCP/UDP protocol",
 			},
 			"destination_port": {
-				Type:        schema.TypeString,
+				Type:        schema.TypeInt,
 				Optional:    true,
 				ForceNew:    true,
 				Description: "Destination port range for your rule. Only with TCP/UDP protocol",
@@ -199,11 +194,11 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 }
 
 func resourceOvhIpFirewallRuleCustomizeDiff(d *schema.ResourceDiff, v interface{}) error {
-	protocol := d.Get("protocol")
+	protocol := d.Get("protocol").(string)
 	fragments := d.Get("fragments").(bool)
-	tcpOption := d.Get("tcp_option")
-	sourcePort := d.Get("source_port")
-	destinationPort := d.Get("destination_port")
+	tcpOption := d.Get("tcp_option").(string)
+	sourcePort := d.Get("source_port").(int)
+	destinationPort := d.Get("destination_port").(int)
 
 	if protocol == "tcp" {
 		return nil
@@ -221,11 +216,11 @@ func resourceOvhIpFirewallRuleCustomizeDiff(d *schema.ResourceDiff, v interface{
 		return nil
 	}
 
-	if sourcePort != "" {
+	if sourcePort > 0 {
 		return errors.New("source_port can only be set when using the tcp or udp protocols.")
 	}
 
-	if destinationPort != "" {
+	if destinationPort > 0 {
 		return errors.New("destination_port can only be set when using the tcp or udp protocols.")
 	}
 
@@ -242,6 +237,14 @@ func resourceOvhIpFirewallRuleSplitId(d *schema.ResourceData) error {
 		d.Set("ip_on_firewall", ipOnFirewall)
 	}
 	return nil
+}
+
+func resourceOvhFirewallRuleValidateIpBlock(v interface{}, k string) (ws []string, errors []error) {
+	err := validateIpBlock(v.(string))
+	if err != nil {
+		errors = append(errors, err)
+	}
+	return
 }
 
 func resourceOvhIpFirewallRuleImportState(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
@@ -286,14 +289,25 @@ func resourceOvhIpFirewallRuleCreate(d *schema.ResourceData, meta interface{}) e
 		d.Set("ip_on_firewall", newIpOnFirewall)
 	}
 
+	destinationPort := strconv.Itoa(d.Get("destination_port").(int))
+	if destinationPort == "0" {
+		destinationPort = ""
+	}
+
+	sourcePort := strconv.Itoa(d.Get("source_port").(int))
+	if sourcePort == "0" {
+		sourcePort = ""
+	}
+
+	strconv.Itoa(123)
 	newFirewallRule := &OvhIpFirewallRuleCreateOpts{
 		Action:          d.Get("action").(string),
-		DestinationPort: d.Get("destination_port").(string),
+		DestinationPort: destinationPort,
 		Fragments:       d.Get("fragments").(bool),
 		Protocol:        d.Get("protocol").(string),
 		Sequence:        newSequence,
 		Source:          d.Get("source").(string),
-		SourcePort:      d.Get("source_port").(string),
+		SourcePort:      sourcePort,
 		TcpOption:       d.Get("tcp_option").(string),
 	}
 
@@ -354,16 +368,29 @@ func resourceOvhIpFirewallRuleRead(d *schema.ResourceData, meta interface{}) err
 		return nil
 	}
 
-	re := regexp.MustCompile("[0-9]+$")
 	d.Set("action", firewallRule.Action)
-	d.Set("destination_port", re.FindString(firewallRule.DestinationPort))
-	d.Set("fragments", firewallRule.Fragments)
 	d.Set("protocol", firewallRule.Protocol)
 	d.Set("sequence", firewallRule.Sequence)
+
+	var destinationPort int
+	if _, err := fmt.Sscanf(firewallRule.DestinationPort, "eq %5d", &destinationPort); err == nil {
+		d.Set("destination_port", destinationPort)
+	}
+	var sourcePort int
+	if _, err := fmt.Sscanf(firewallRule.SourcePort, "eq %5d", &sourcePort); err == nil {
+		d.Set("source_port", sourcePort)
+	}
+
+	if firewallRule.Fragments {
+		d.Set("fragments", firewallRule.Fragments)
+	}
+
 	d.Set("source", firewallRule.Source)
-	d.Set("source_port", re.FindString(firewallRule.SourcePort))
-	d.Set("tcp_option", firewallRule.TcpOption)
-	d.Set("fragments", firewallRule.Fragments)
+
+	if firewallRule.TcpOption != "" {
+		d.Set("tcp_option", firewallRule.TcpOption)
+	}
+
 	d.Set("creation_date", firewallRule.CreationDate)
 	d.Set("rule", firewallRule.Rule)
 	d.Set("state", firewallRule.State)
