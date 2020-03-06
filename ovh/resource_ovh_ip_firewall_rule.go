@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"log"
 	"net"
 	"strings"
@@ -80,13 +81,7 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 				Type:     schema.TypeInt,
 				Required: true,
 				ForceNew: true,
-				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
-					value := v.(int)
-					if value < 0 || value > 19 {
-						errors = append(errors, fmt.Errorf("Sequence not in 0..19 range"))
-					}
-					return
-				},
+				ValidateFunc: validation.IntBetween(0,19),
 			},
 			"action": {
 				Type:        schema.TypeString,
