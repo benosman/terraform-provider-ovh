@@ -52,11 +52,38 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 		CustomizeDiff: resourceOvhIpFirewallRuleCustomizeDiff,
 
 		Schema: map[string]*schema.Schema{
-			"ip": {
+			"firewall_id": {
 				Type:        schema.TypeString,
-				Description: "IP block",
-				Required:    true,
+				Description: "Firewall Id",
+				Computed:    true,
+				Optional:    true,
 				ForceNew:    true,
+				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
+					splitId := strings.SplitN(v.(string), "_", 2)
+					if len(splitId) != 2 {
+						errors = append(errors, fmt.Errorf("Firewall Id is not a valid string"))
+						return
+					}
+					ip := splitId[0]
+					ipOnFirewall := splitId[1]
+					err := validateIpBlock(ip)
+					if err != nil {
+						errors = append(errors, err)
+					}
+					ipErr := validateIp(ipOnFirewall)
+					if ipErr != nil {
+						errors = append(errors, ipErr)
+					}
+					return
+				},
+			},
+			"ip": {
+				Type:         schema.TypeString,
+				Description:  "IP block",
+				Computed:     true,
+				Optional:     true,
+				ForceNew:     true,
+				ExactlyOneOf: []string{"firewall_id", "ip"},
 				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
 					err := validateIpBlock(v.(string))
 					if err != nil {
@@ -66,10 +93,12 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 				},
 			},
 			"ip_on_firewall": {
-				Type:        schema.TypeString,
-				Description: "IP address",
-				Optional:    true,
-				ForceNew:    true,
+				Type:         schema.TypeString,
+				Description:  "IP address",
+				Computed:     true,
+				Optional:     true,
+				ForceNew:     true,
+				ExactlyOneOf: []string{"firewall_id", "ip_on_firewall"},
 				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
 					err := validateIp(v.(string))
 					if err != nil {
@@ -79,10 +108,10 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 				},
 			},
 			"sequence": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
-				ValidateFunc: validation.IntBetween(0,19),
+				Type:         schema.TypeInt,
+				Required:     true,
+				ForceNew:     true,
+				ValidateFunc: validation.IntBetween(0, 19),
 			},
 			"action": {
 				Type:        schema.TypeString,
@@ -203,9 +232,19 @@ func resourceOvhIpFirewallRuleCustomizeDiff(d *schema.ResourceDiff, v interface{
 	return nil
 }
 
-func resourceOvhIpFirewallRuleImportState(
-	d *schema.ResourceData,
-	meta interface{}) ([]*schema.ResourceData, error) {
+func resourceOvhIpFirewallRuleSplitId(d *schema.ResourceData) error {
+	firewallId := d.Get("firewall_id").(string)
+	if firewallId != "" {
+		splitId := strings.SplitN(firewallId, "_", 2)
+		ip := splitId[0]
+		ipOnFirewall := splitId[1]
+		d.Set("ip", ip)
+		d.Set("ip_on_firewall", ipOnFirewall)
+	}
+	return nil
+}
+
+func resourceOvhIpFirewallRuleImportState(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 	givenId := d.Id()
 	splitId := strings.SplitN(givenId, "_", 3)
 	if len(splitId) != 3 {
@@ -224,6 +263,9 @@ func resourceOvhIpFirewallRuleImportState(
 
 func resourceOvhIpFirewallRuleCreate(d *schema.ResourceData, meta interface{}) error {
 	provider := meta.(*Config)
+
+	// Retrieve and split firewall id if set
+	_ = resourceOvhIpFirewallRuleSplitId(d)
 
 	// Create the new firewall rule
 	newIp := d.Get("ip").(string)
@@ -255,6 +297,7 @@ func resourceOvhIpFirewallRuleCreate(d *schema.ResourceData, meta interface{}) e
 		TcpOption:       d.Get("tcp_option").(string),
 	}
 
+	d.Set("firewall_id", fmt.Sprintf("%s_%s", newIp, newIpOnFirewall))
 	log.Printf("[DEBUG] OVH IP Firewall create configuration: %s => %#v", newIpOnFirewall, newFirewallRule)
 
 	resultFirewall := OvhIpFirewallRuleResponse{}
@@ -293,6 +336,9 @@ func resourceOvhIpFirewallRuleCreate(d *schema.ResourceData, meta interface{}) e
 func resourceOvhIpFirewallRuleRead(d *schema.ResourceData, meta interface{}) error {
 	provider := meta.(*Config)
 
+	// Retrieve and split firewall id if set
+	_ = resourceOvhIpFirewallRuleSplitId(d)
+
 	ip := d.Get("ip").(string)
 	ipOnFirewall := d.Get("ip_on_firewall").(string)
 	sequence := d.Get("sequence").(int)
@@ -330,6 +376,8 @@ func resourceOvhIpFirewallRuleDelete(d *schema.ResourceData, meta interface{}) e
 	ip := d.Get("ip").(string)
 	ipOnFirewall := d.Get("ip_on_firewall").(string)
 	sequence := d.Get("sequence").(int)
+
+	d.Set("firewall_id", fmt.Sprintf("%s_%s", ip, ipOnFirewall))
 
 	log.Printf("[INFO] Deleting OVH IP Firewall Rule: %s->%s->%d", ip, ipOnFirewall, sequence)
 
