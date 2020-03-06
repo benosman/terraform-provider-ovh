@@ -1,6 +1,7 @@
 package ovh
 
 import (
+	"errors"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -11,10 +12,6 @@ import (
 
 	"github.com/ovh/go-ovh/ovh"
 )
-
-type OvhIpFirewallRuleUpdateOpts struct {
-	Enabled bool `json:"enabled"`
-}
 
 type OvhIpFirewallRuleCreateOpts struct {
 	Action          string `json:"action"`
@@ -50,6 +47,7 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			State: resourceOvhIpFirewallRuleImportState,
 		},
+		CustomizeDiff: resourceOvhIpFirewallRuleCustomizeDiff,
 
 		Schema: map[string]*schema.Schema{
 			"ip": {
@@ -173,6 +171,40 @@ func resourceOvhIpFirewallRule() *schema.Resource {
 			},
 		},
 	}
+}
+
+func resourceOvhIpFirewallRuleCustomizeDiff(d *schema.ResourceDiff, v interface{}) error {
+	protocol := d.Get("protocol")
+	fragments := d.Get("fragments").(bool)
+	tcpOption := d.Get("tcp_option")
+	sourcePort := d.Get("source_port")
+	destinationPort := d.Get("destination_port")
+
+	if protocol == "tcp" {
+		return nil
+	}
+
+	if fragments {
+		return errors.New("fragments can only be set when using the tcp protocol.")
+	}
+
+	if tcpOption != "" {
+		return errors.New("tcp_option can only be set when using the tcp protocol.")
+	}
+
+	if protocol == "udp" {
+		return nil
+	}
+
+	if sourcePort != "" {
+		return errors.New("source_port can only be set when using the tcp or udp protocols.")
+	}
+
+	if destinationPort != "" {
+		return errors.New("destination_port can only be set when using the tcp or udp protocols.")
+	}
+
+	return nil
 }
 
 func resourceOvhIpFirewallRuleImportState(
