@@ -120,6 +120,22 @@ func resourceOvhIpFirewallCreate(d *schema.ResourceData, meta interface{}) error
 		d.Set("ip_on_firewall", newIpOnFirewall)
 	}
 
+	exists, existingFirewall, existingErr := resourceOvhIpFirewallExists(newIp, newIpOnFirewall.(string), provider.OVHClient)
+
+	if existingErr != nil {
+		return fmt.Errorf("Failed to create OVH IP Firewall: %s", existingErr)
+	}
+
+	if exists {
+		if existingFirewall.Enabled == false && existingFirewall.State == "ok" {
+			d.SetId(fmt.Sprintf("%s_%s", newIp, existingFirewall.IpOnFirewall))
+			return resourceOvhIpFirewallUpdate(d, meta)
+		} else {
+			// TODO add parameter to control whether to adopt prexisting firewalls
+			return fmt.Errorf("OVH IP Firewall %s -> %s already exists.", newIp, newIpOnFirewall, existingErr)
+		}
+	}
+
 	newFirewall := &OvhIpFirewallCreateOpts{
 		IpOnFirewall: d.Get("ip_on_firewall").(string),
 	}
@@ -224,17 +240,21 @@ func resourceOvhIpFirewallDelete(d *schema.ResourceData, meta interface{}) error
 	return nil
 }
 
-func resourceOvhIpFirewallExists(ip, ipOnFirewall string, c *ovh.Client) error {
+func resourceOvhIpFirewallExists(ip, ipOnFirewall string, c *ovh.Client) (bool, OvhIpFirewallResponse, error) {
 	firewall := OvhIpFirewallResponse{}
 	endpoint := fmt.Sprintf("/ip/%s/firewall/%s", strings.Replace(ip, "/", "%2F", 1), ipOnFirewall)
 
 	err := c.Get(endpoint, &firewall)
 	if err != nil {
-		return fmt.Errorf("calling %s:\n\t %q", endpoint, err)
+		if err.(*ovh.APIError).Code == 404 {
+			log.Printf("[DEBUG] firewall rule %s -> %s does not exist", ip, ipOnFirewall)
+			return false, firewall, nil
+		} else {
+			return false, firewall, err
+		}
 	}
-	log.Printf("[DEBUG] Read IP Firewall: %s", firewall)
-
-	return nil
+	log.Printf("[DEBUG] firewall rule %s -> %s already exists", ip, ipOnFirewall)
+	return true, firewall, nil
 }
 
 // returns a resource.StateRefreshFunc that is used to watch firewall task
