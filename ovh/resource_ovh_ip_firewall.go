@@ -22,9 +22,9 @@ type OvhIpFirewallUpdateOpts struct {
 }
 
 type OvhIpFirewallResponse struct {
-	IpOnFirewall string `json:"ipOnFirewall,omitempty"`
-	Enabled      bool   `json:"enabled,omitempty"`
-	State        string `json:"state,omitempty"`
+	IpOnFirewall string `json:"ipOnFirewall"`
+	Enabled      bool   `json:"enabled"`
+	State        string `json:"state"`
 }
 
 func resourceOvhIpFirewall() *schema.Resource {
