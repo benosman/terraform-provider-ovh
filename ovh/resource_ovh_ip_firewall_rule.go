@@ -240,9 +240,12 @@ func resourceOvhIpFirewallRuleSplitId(d *schema.ResourceData) error {
 }
 
 func resourceOvhFirewallRuleValidateIpBlock(v interface{}, k string) (ws []string, errors []error) {
-	err := validateIpBlock(v.(string))
-	if err != nil {
-		errors = append(errors, err)
+	value := v.(string)
+	if value != "" {
+		err := validateIpBlock(value)
+		if err != nil {
+			errors = append(errors, err)
+		}
 	}
 	return
 }
