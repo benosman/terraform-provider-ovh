@@ -15,15 +15,19 @@ import (
 	"github.com/ovh/go-ovh/ovh"
 )
 
+type OvhIpFirewallRuleTcpOptionModel struct {
+	Fragments bool   `json:"fragments,omitempty"`
+	Option    string `json:"option,omitempty"`
+}
+
 type OvhIpFirewallRuleCreateOpts struct {
-	Action          string `json:"action"`
-	DestinationPort string `json:"destinationPort,omitempty"`
-	Fragments       bool   `json:"fragments,omitempty"`
-	Protocol        string `json:"protocol"`
-	Sequence        int    `json:"sequence"`
-	Source          string `json:"source,omitempty"`
-	SourcePort      string `json:"sourcePort,omitempty"`
-	TcpOption       string `json:"tcpOption,omitempty"`
+	Action          string                           `json:"action"`
+	DestinationPort string                           `json:"destinationPort,omitempty"`
+	Protocol        string                           `json:"protocol"`
+	Sequence        int                              `json:"sequence"`
+	Source          string                           `json:"source,omitempty"`
+	SourcePort      string                           `json:"sourcePort,omitempty"`
+	TcpOption       *OvhIpFirewallRuleTcpOptionModel `json:"tcpOption,omitempty"`
 }
 
 type OvhIpFirewallRuleResponse struct {
@@ -303,15 +307,21 @@ func resourceOvhIpFirewallRuleCreate(d *schema.ResourceData, meta interface{}) e
 	}
 
 	strconv.Itoa(123)
+
 	newFirewallRule := &OvhIpFirewallRuleCreateOpts{
 		Action:          d.Get("action").(string),
 		DestinationPort: destinationPort,
-		Fragments:       d.Get("fragments").(bool),
 		Protocol:        d.Get("protocol").(string),
 		Sequence:        newSequence,
 		Source:          d.Get("source").(string),
 		SourcePort:      sourcePort,
-		TcpOption:       d.Get("tcp_option").(string),
+	}
+
+	if newFirewallRule.Protocol == "tcp" {
+		newFirewallRule.TcpOption = &OvhIpFirewallRuleTcpOptionModel{
+			Fragments: d.Get("fragments").(bool),
+			Option:    d.Get("tcp_option").(string),
+		}
 	}
 
 	d.Set("firewall_id", fmt.Sprintf("%s_%s", newIp, newIpOnFirewall))
